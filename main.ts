@@ -657,10 +657,15 @@ function solve(text: string): string {
   const curBoxes = boxList.slice();
   let curPlayer = player;
   let moves = '';
+  let remaining = 450_000; // total expansion budget for this whole level, bounds wall time
   if (balanced) {
     for (let ci = 0; ci < order.length; ci++) {
       const c = order[ci]!;
       const boxes = compBoxes[c].slice();
+      const perBoxCap = boxes.length <= 2 ? 30_000 : boxes.length === 3 ? 50_000
+        : boxes.length === 4 ? 70_000 : boxes.length === 5 ? 90_000
+        : boxes.length === 6 ? 120_000 : 150_000;
+      const capRoom = Math.min(perBoxCap, Math.max(10_000, remaining));
       const goalsSet = new Uint8Array(n);
       for (const go of compGoals[c]) {
         goalsSet[go] = 1;
@@ -678,19 +683,22 @@ function solve(text: string): string {
       }
       if (entry < 0) { return ''; }
       if (VERBOSE) {
-        console.error('comp c=' + c + ' entry=' + entry + ' boxes=' + boxes.length + ' goals=' + compGoals[c].length);
+        console.error('comp c=' + c + ' entry=' + entry + ' boxes=' + boxes.length + ' goals=' + compGoals[c].length + ' cap=' + capRoom + ' remaining=' + remaining);
       }
-      const capRoom = boxes.length <= 4 ? 400_000 : 1_000_000;
       const res = solveRoom(w, h, wall, goalsSet, compMask(comps[c], n), dead, compGoals[c], boxes, entry, [], false, capRoom);
       if (res === null) {
-        return '';
+        return ''; // abandon the whole level: a partial solve scores 0 anyway
       }
+      remaining -= res.x;
       moves += res.moves;
       for (let k = 0; k < boxes.length; k++) {
         const at = curBoxes.indexOf(boxes[k]);
         curBoxes[at] = res.boxes[k];
       }
       curPlayer = res.p;
+      if (remaining <= 60_000 && ci + 1 < order.length) {
+        return ''; // not enough budget left for another room; abandon level
+      }
     }
   }
   if (!balanced) {
